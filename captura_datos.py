@@ -32,7 +32,7 @@ while True:
 		count = count + 1
 	cv2.imshow('frame',frame) #Mostrar una ventana con las imagenes que captura de nuestra camara
 
-	k =  cv2.waitKey(1)
+	k =  cv2.waitKey(1) #Cada 1 ms mostrara un frame
 	if k == 27 or count > 300: #Solo permitir capturar 300 imagenes
 		break
 
