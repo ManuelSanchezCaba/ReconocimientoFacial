@@ -4,32 +4,39 @@ import imutils
 import numpy as np
 import tkinter
 
+from numpy.lib.type_check import imag
+
 class captura_datos:
-    def __init__(self, path):
-        self.count_persona = len(os.listdir(path)) + 1
-        self.count = 1
+    def __init__(self, image_path, image_path_list):
+        self.image_path = image_path
+        self.image_path_list = image_path_list
 
-    def inicializar_carpeta_rostro(self, name, path):
-        full_path = path + '/' + name
-        if not os.path.exists(full_path):
-            print('Carpeta creada: ',full_path)
-            os.makedirs(full_path)
+    def inicializar_carpeta_rostro(self, name):
+        if not os.path.exists(name):
+            print('Creando Carpeta de Rostros')
+            os.makedirs(name)
 
-    def guardar_rostros(self, frame, face_classif, full_path):
-        frame =  imutils.resize(frame, width=640)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        aux_frame = frame.copy()
+    def guardar_rostros(self, face_classif):
+        count = 0
 
-        faces = face_classif.detectMultiScale(gray,1.3,5)
+        for image_name in self.image_path_list:
+            print('Image Name is', image_name)
+            image = cv2.imread(self.image_path + '/' + image_name)
+            image_aux = image.copy()
+            gray_scale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            faces = face_classif.detectMultiScale(gray_scale, 1.1, 5)
 
-        for (x,y,w,h) in faces:
-            cv2.rectangle(frame, (x,y),(x+w,y+h),(0,255,0),2)
-            rostro = aux_frame[y:y+h,x:x+w]
-            rostro = cv2.resize(rostro,(150,150),interpolation=cv2.INTER_CUBIC)
-            cv2.imwrite(full_path + '/rotro_{}.jpg'.format(self.count), rostro)
-            self.count += 1
+            for (x, y, w, h) in faces:
+                cv2.rectangle(image, (x, y), (x + w, y + h), (128, 0, 255), 2) #Obtener un rectangulo del rostro encontrado
+                rostro = image_aux[y:y+h, x:x+w] #Obtener rostros de la copia del rostro
+                rostro = cv2.resize(rostro, (150, 150), interpolation= cv2.INTER_CUBIC) #Redimensionar a 150x150 pixeles el rostro copia
+                cv2.imwrite('Rostros/rostro_{}.jpg'.format(count), rostro) #Guardar rostro encontrado en una carpeta
+                count += 1
+                cv2.imshow('Imagen', image)
+                cv2.imshow('Image', rostro)
+                cv2.waitKey(0) #Esperar que se teclee algo
 
-        cv2.imshow('frame',frame)
+        cv2.destroyAllWindows() #Eliminar las ventanas creadas para mostrar los recortes
 
 class entrenamiento:
     def __init__(self):
@@ -37,18 +44,16 @@ class entrenamiento:
         self.faces_data = []
         self.label = 0
 
-    def asignar_label_rostros(self, path, people_list):
-        for name_direct in people_list:
-            person_path = path + '/' + name_direct
+    def asignar_label_rostros(self, path, face_list):
+        for name_file in face_list:
             print('Leyendo las imágenes')
-            
-            for file_name in os.listdir(person_path):
-                self.labels.append(self.label)
-                self.faces_data.append(cv2.imread(person_path + '/' + file_name, 0))
-                image = cv2.imread(person_path + '/' + file_name, 0) #Estas lineas son para que nos muestre las imagenes que esta guardando en escalas de grises.
-                cv2.imshow('image', image)
-                cv2.waitKey(10)
+            self.labels.append(self.label)
+            self.faces_data.append(cv2.imread(path + '/' + name_file, 0))
+            image = cv2.imread(path + '/' + name_file, 0) #Estas lineas son para que nos muestre las imagenes que esta guardando en escalas de grises.
+            cv2.imshow('image', image)
+            cv2.waitKey(1)
             self.label = self.label + 1
+                
 
     def generar_modelo(self, modelo):
         face_recognizer = cv2.face.LBPHFaceRecognizer_create()
@@ -83,54 +88,43 @@ class reconocimiento_facial:
             else:
                 cv2.putText(frame, 'Desconocido', (x,y-20), 2, 0.8, (0,0,255), 1, cv2.LINE_AA)
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0,0,255), 2)
+            
+            cv2.imshow('Image', frame)
+            cv2.waitKey(0)
+        
+        cv2.destroyAllWindows()
 
 def detener_captura(capturas):
     capturas.release() #Cerramos la camara para que deje de capturar
     cv2.destroyAllWindows() #Destruimos la ventana de la camara
 
-cd = captura_datos('./train')
-
 def capturar_datos():
-    capturas = cv2.VideoCapture(0) #Capturar rostros de mi camara
+    image_path = './BancoImagenes'
+    image_path_list = os.listdir(image_path)
+    print('Images = ', image_path_list)
+
     face_classif = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_frontalface_default.xml') #Clasificador de OpenCV para detectar rostros
     
-    cd.inicializar_carpeta_rostro('persona' + str(cd.count_persona), './train')
+    cd = captura_datos(image_path, image_path_list)
 
-    while True:
-        ret, frame = capturas.read() #Leer cada frame del video
-        if ret == False: return
+    cd.inicializar_carpeta_rostro('Rostros')
 
-        if cd.count > 300:
-            detener_captura(capturas)
-            cd.count_persona = cd.count_persona + 1
-            cd.count = 1
-        else:
-            cd.guardar_rostros(frame, face_classif, './train/persona' + str(cd.count_persona))
-            cv2.waitKey(1)
+    cd.guardar_rostros(face_classif)
 
 def generar_modelo():
     train = entrenamiento()
-    train.asignar_label_rostros('./train', os.listdir('./train'))
+    train.asignar_label_rostros('./Rostros', os.listdir('./Rostros'))
     train.generar_modelo('modeloLBPH.xml')
 
 def reconocedor_rostros():
-    capturas = cv2.VideoCapture(0) #Capturar rostros de mi camara
+    image_path = './BancoImagenes/imagen_1.jpg'
+    image = cv2.imread(image_path)
     face_classif = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_frontalface_default.xml') #Clasificador de OpenCV para detectar rostros
-    fr = reconocimiento_facial('./train')
+    fr = reconocimiento_facial('./Rostros')
+    
     fr.utilizar_modelo('modeloLBPH.xml')
 
-    while True:
-        ret, frame = capturas.read() #Leer cada frame del video
-        if ret == False: return
-
-        fr.detectar_rostro(frame, face_classif)
-        cv2.imshow('frame', frame)
-
-        k = cv2.waitKey(1)
-        if k == 27: #Salir si se le da a esc
-            break
-    
-    detener_captura(capturas)
+    fr.detectar_rostro(image, face_classif)
 
 def main():
     ventana = tkinter.Tk()
@@ -146,6 +140,5 @@ def main():
     boton3.pack()
 
     ventana.mainloop()
-            
 
 main()
